@@ -1,0 +1,425 @@
+# BlackRoad Mobile & Edge Tools Configuration
+# Integration settings for iOS/mobile development tools
+
+version: "1.0"
+project: "blackroad-ai-inference-accelerator"
+
+# =============================================================================
+# TERMIUS - SSH Management
+# =============================================================================
+termius:
+  name: "Termius"
+  type: ssh_management
+  enabled: true
+  description: "Cross-platform SSH client for managing remote servers and Pi fleet"
+
+  features:
+    - Multi-hop SSH connections
+    - SFTP file transfer
+    - Port forwarding
+    - Synchronized host database
+    - Team sharing
+
+  host_groups:
+    blackroad_pi_fleet:
+      name: "BlackRoad Pi Fleet"
+      description: "Raspberry Pi nodes for edge inference"
+      hosts:
+        - label: "pi-node-1"
+          hostname: "${PI_NODE_1_HOST}"
+          port: 22
+          username: "pi"
+          auth: key
+          tags: ["edge", "inference", "npu"]
+
+        - label: "pi-node-2"
+          hostname: "${PI_NODE_2_HOST}"
+          port: 22
+          username: "pi"
+          auth: key
+          tags: ["edge", "inference"]
+
+        - label: "pi-node-3"
+          hostname: "${PI_NODE_3_HOST}"
+          port: 22
+          username: "pi"
+          auth: key
+          tags: ["edge", "inference", "gpu"]
+
+    cloud_servers:
+      name: "Cloud Servers"
+      description: "DigitalOcean and other cloud instances"
+      hosts:
+        - label: "inference-primary"
+          hostname: "${DO_INFERENCE_HOST}"
+          port: 22
+          username: "root"
+          auth: key
+          tags: ["cloud", "inference", "primary"]
+
+        - label: "state-server"
+          hostname: "${STATE_SERVER_HOST}"
+          port: 22
+          username: "ubuntu"
+          auth: key
+          tags: ["cloud", "state", "database"]
+
+  snippets:
+    - name: "Check Inference Health"
+      command: "curl -s localhost:8080/health | jq ."
+      description: "Check local inference service health"
+
+    - name: "View Inference Logs"
+      command: "journalctl -u blackroad-inference -f"
+      description: "Follow inference service logs"
+
+    - name: "Sync State"
+      command: "python /opt/blackroad/scripts/sync_state.py --all"
+      description: "Run state sync across platforms"
+
+    - name: "Git Pull Latest"
+      command: "cd /opt/blackroad && git pull origin main"
+      description: "Update to latest code"
+
+# =============================================================================
+# ISH - iOS Shell (Alpine Linux)
+# =============================================================================
+ish:
+  name: "iSH"
+  type: mobile_shell
+  enabled: true
+  description: "Alpine Linux shell running on iOS for mobile development"
+
+  capabilities:
+    - alpine_linux_userspace
+    - apk_package_manager
+    - git_cli
+    - python3
+    - ssh_client
+    - nano_vim_editors
+
+  setup_script: |
+    #!/bin/sh
+    # BlackRoad iSH Setup Script
+
+    # Update packages
+    apk update && apk upgrade
+
+    # Install essentials
+    apk add git python3 py3-pip openssh curl jq nano vim
+
+    # Install Python dependencies
+    pip3 install requests pyyaml aiohttp
+
+    # Clone repository
+    mkdir -p ~/blackroad
+    cd ~/blackroad
+    git clone https://github.com/BlackRoad-OS/blackroad-ai-inference-accelerator.git
+
+    # Setup SSH keys
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+
+    echo "iSH setup complete!"
+
+  sync_config:
+    local_path: "/home/user/blackroad"
+    sync_on_launch: true
+    auto_pull: true
+
+  scripts:
+    - name: "health_check.sh"
+      description: "Check all endpoint health from mobile"
+      content: |
+        #!/bin/sh
+        cd ~/blackroad/blackroad-ai-inference-accelerator
+        python3 scripts/validate_endpoints.py --all
+
+    - name: "quick_sync.sh"
+      description: "Quick state sync"
+      content: |
+        #!/bin/sh
+        cd ~/blackroad/blackroad-ai-inference-accelerator
+        python3 scripts/sync_state.py --health
+
+# =============================================================================
+# SHELLFISH - SFTP Client
+# =============================================================================
+shellfish:
+  name: "Shellfish"
+  type: file_transfer
+  enabled: true
+  description: "Professional SFTP client for iOS with terminal support"
+
+  features:
+    - sftp_transfers
+    - ssh_terminal
+    - file_editing
+    - icloud_sync
+    - files_app_integration
+
+  connections:
+    - name: "Development Server"
+      host: "${DEV_SERVER_HOST}"
+      port: 22
+      username: "developer"
+      auth: key
+      default_path: "/var/blackroad"
+      bookmark_paths:
+        - "/var/blackroad/config"
+        - "/var/blackroad/logs"
+        - "/var/blackroad/models"
+
+    - name: "Pi Fleet - Node 1"
+      host: "${PI_NODE_1_HOST}"
+      port: 22
+      username: "pi"
+      auth: key
+      default_path: "/opt/blackroad"
+
+    - name: "State Server"
+      host: "${STATE_SERVER_HOST}"
+      port: 22
+      username: "ubuntu"
+      auth: key
+      default_path: "/home/ubuntu/blackroad"
+
+  quick_actions:
+    - name: "Download Logs"
+      source: "/var/blackroad/logs/inference.log"
+      destination: "Downloads/blackroad/"
+
+    - name: "Upload Config"
+      source: "Documents/blackroad/config/"
+      destination: "/var/blackroad/config/"
+
+# =============================================================================
+# WORKING COPY - Git Client
+# =============================================================================
+working_copy:
+  name: "Working Copy"
+  type: git_client
+  enabled: true
+  description: "Powerful Git client for iOS with full repository management"
+
+  features:
+    - full_git_support
+    - syntax_highlighting
+    - diff_viewer
+    - merge_conflict_resolution
+    - ssh_key_management
+    - github_integration
+    - files_app_provider
+
+  repositories:
+    - name: "BlackRoad AI Inference Accelerator"
+      remote: "git@github.com:BlackRoad-OS/blackroad-ai-inference-accelerator.git"
+      local_path: "blackroad-ai-inference-accelerator"
+      default_branch: "main"
+      auto_fetch: true
+      fetch_interval: 300  # 5 minutes
+
+    - name: "BlackRoad Core"
+      remote: "git@github.com:BlackRoad-OS/blackroad-core.git"
+      local_path: "blackroad-core"
+      default_branch: "main"
+      auto_fetch: true
+
+  branch_rules:
+    allowed_prefixes:
+      - "feature/"
+      - "bugfix/"
+      - "hotfix/"
+      - "claude/"
+      - "mobile/"
+
+    protected_branches:
+      - "main"
+      - "production"
+
+  workflows:
+    - name: "Quick Commit"
+      description: "Stage all, commit, push"
+      steps:
+        - stage_all
+        - commit_with_message
+        - push
+
+    - name: "PR Ready"
+      description: "Prepare branch for PR"
+      steps:
+        - fetch_origin
+        - rebase_main
+        - push_force_with_lease
+
+# =============================================================================
+# PYTO - Python IDE
+# =============================================================================
+pyto:
+  name: "Pyto"
+  type: python_ide
+  enabled: true
+  description: "Full Python IDE for iOS with scientific computing support"
+
+  features:
+    - python_3_10
+    - numpy_pandas
+    - jupyter_notebooks
+    - pip_packages
+    - files_integration
+    - shortcuts_automation
+
+  installed_packages:
+    - numpy
+    - pandas
+    - requests
+    - aiohttp
+    - pyyaml
+    - httpx
+
+  scripts:
+    - name: "health_check.py"
+      description: "Check all BlackRoad endpoint health"
+      content: |
+        """
+        BlackRoad Health Check - Mobile
+        Run this to verify all endpoints are accessible.
+        """
+        import asyncio
+        import aiohttp
+        import json
+
+        ENDPOINTS = {
+            "cloudflare": "https://api.cloudflare.com/client/v4/user",
+            "github": "https://api.github.com/user",
+            "vercel": "https://api.vercel.com/v2/user",
+        }
+
+        async def check_endpoint(name, url):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, timeout=10) as resp:
+                        return {"name": name, "status": resp.status, "healthy": resp.status < 400}
+            except Exception as e:
+                return {"name": name, "status": 0, "healthy": False, "error": str(e)}
+
+        async def main():
+            print("BlackRoad Health Check")
+            print("=" * 40)
+
+            tasks = [check_endpoint(name, url) for name, url in ENDPOINTS.items()]
+            results = await asyncio.gather(*tasks)
+
+            for r in results:
+                icon = "OK" if r["healthy"] else "FAIL"
+                print(f"[{icon}] {r['name']}: {r['status']}")
+
+            print("=" * 40)
+
+        asyncio.run(main())
+
+    - name: "deploy_model.py"
+      description: "Deploy model to Pi fleet"
+      content: |
+        """
+        Deploy model to Raspberry Pi fleet.
+        """
+        import requests
+        import os
+
+        PI_NODES = [
+            os.getenv("PI_NODE_1_HOST"),
+            os.getenv("PI_NODE_2_HOST"),
+            os.getenv("PI_NODE_3_HOST"),
+        ]
+
+        def deploy_model(model_name: str, model_path: str):
+            print(f"Deploying {model_name}...")
+
+            for node in PI_NODES:
+                if not node:
+                    continue
+
+                try:
+                    resp = requests.post(
+                        f"http://{node}:8080/v1/models/load",
+                        json={"name": model_name, "path": model_path},
+                        timeout=30
+                    )
+                    status = "OK" if resp.ok else "FAIL"
+                    print(f"  [{status}] {node}")
+                except Exception as e:
+                    print(f"  [FAIL] {node}: {e}")
+
+        if __name__ == "__main__":
+            deploy_model("llama3-q4", "/models/llama3-q4.gguf")
+
+    - name: "sync_state.py"
+      description: "Sync CRM state from mobile"
+      content: |
+        """
+        Sync state between platforms.
+        """
+        import requests
+        import json
+        from datetime import datetime
+
+        STATE_API = "https://state.blackroad.ai/api/v1"
+
+        def sync():
+            print(f"Syncing state at {datetime.now()}")
+
+            # Get current state
+            resp = requests.get(f"{STATE_API}/state/current")
+            if resp.ok:
+                state = resp.json()
+                print(f"Current state hash: {state.get('hash', 'N/A')[:16]}...")
+
+            # Trigger sync
+            resp = requests.post(f"{STATE_API}/sync", json={"force": False})
+            if resp.ok:
+                result = resp.json()
+                print(f"Sync complete: {result.get('synced', 0)} entries")
+            else:
+                print(f"Sync failed: {resp.status_code}")
+
+        if __name__ == "__main__":
+            sync()
+
+  shortcuts_actions:
+    - name: "Run Health Check"
+      script: "health_check.py"
+      shortcut_name: "BR Health"
+
+    - name: "Quick Sync"
+      script: "sync_state.py"
+      shortcut_name: "BR Sync"
+
+# =============================================================================
+# COMMON CONFIGURATION
+# =============================================================================
+common:
+  # SSH Key Locations
+  ssh_keys:
+    default: "~/.ssh/blackroad_ed25519"
+    pi_fleet: "~/.ssh/pi_fleet_ed25519"
+    cloud: "~/.ssh/cloud_ed25519"
+
+  # Sync Settings
+  sync:
+    interval: 300  # 5 minutes
+    auto_sync: true
+    conflict_resolution: "last_write_wins"
+
+  # Notifications
+  notifications:
+    enabled: true
+    on_sync_complete: true
+    on_health_failure: true
+    on_pr_ready: true
+
+  # Security
+  security:
+    require_face_id: true
+    auto_lock: 300  # 5 minutes
+    clear_clipboard: 60  # 1 minute

@@ -1,0 +1,190 @@
+# BlackRoad Kanban Configuration
+# Salesforce-style project management in GitHub
+# CRM holds state, Cloudflare syncs, Git stores files
+
+version: "2.0"
+project:
+  name: "BlackRoad AI Inference Accelerator"
+  id: "blackroad-ai-inference"
+  org: "BlackRoad-OS"
+
+# Board Configuration (Salesforce-style stages)
+boards:
+  main:
+    name: "Development Pipeline"
+    columns:
+      - id: backlog
+        name: "Backlog"
+        wip_limit: null
+        color: "#6B7280"
+
+      - id: qualified
+        name: "Qualified"
+        wip_limit: 10
+        color: "#9C27B0"  # Violet
+
+      - id: in_progress
+        name: "In Progress"
+        wip_limit: 5
+        color: "#2979FF"  # Electric Blue
+
+      - id: review
+        name: "Review/QA"
+        wip_limit: 3
+        color: "#F5A623"  # Amber
+
+      - id: staging
+        name: "Staging"
+        wip_limit: 2
+        color: "#FF1D6C"  # Hot Pink
+
+      - id: deployed
+        name: "Deployed"
+        wip_limit: null
+        color: "#10B981"
+
+  pr_pipeline:
+    name: "Pull Request Pipeline"
+    columns:
+      - id: draft
+        name: "Draft PRs"
+        color: "#6B7280"
+
+      - id: ready
+        name: "Ready for Review"
+        color: "#2979FF"
+
+      - id: reviewing
+        name: "Under Review"
+        color: "#F5A623"
+
+      - id: approved
+        name: "Approved"
+        color: "#10B981"
+
+      - id: merged
+        name: "Merged"
+        color: "#FF1D6C"
+
+# Card Types (Salesforce-style objects)
+card_types:
+  feature:
+    name: "Feature"
+    icon: "star"
+    fields:
+      - name: priority
+        type: select
+        options: [P0, P1, P2, P3]
+      - name: story_points
+        type: number
+      - name: assignee
+        type: user
+      - name: due_date
+        type: date
+      - name: sha_hash
+        type: string
+        computed: true
+
+  bug:
+    name: "Bug"
+    icon: "bug"
+    fields:
+      - name: severity
+        type: select
+        options: [critical, high, medium, low]
+      - name: affected_endpoints
+        type: multiselect
+        options_from: endpoints
+      - name: reproduction_hash
+        type: string
+
+  integration:
+    name: "Integration Task"
+    icon: "plug"
+    fields:
+      - name: endpoint
+        type: select
+        options_from: endpoints
+      - name: auth_type
+        type: select
+        options: [oauth2, api_key, jwt, basic]
+      - name: state_sync
+        type: boolean
+
+  agent_task:
+    name: "Agent Task"
+    icon: "robot"
+    fields:
+      - name: agent_type
+        type: select
+        options: [claude, explore, bash, plan]
+      - name: auto_retry
+        type: boolean
+      - name: max_attempts
+        type: number
+        default: 3
+
+# Automation Rules
+automations:
+  - name: "Auto-hash on create"
+    trigger: card_created
+    action: compute_sha256_hash
+
+  - name: "Sync to CRM on status change"
+    trigger: status_changed
+    action: sync_to_salesforce
+
+  - name: "Update Cloudflare state"
+    trigger: card_updated
+    action: cloudflare_kv_sync
+
+  - name: "PR validation on move to review"
+    trigger:
+      type: moved_to_column
+      column: review
+    action:
+      - validate_pr_checks
+      - run_endpoint_tests
+      - compute_integrity_hash
+
+# Labels (synced across platforms)
+labels:
+  priority:
+    - { name: "P0-critical", color: "#DC2626" }
+    - { name: "P1-high", color: "#F59E0B" }
+    - { name: "P2-medium", color: "#3B82F6" }
+    - { name: "P3-low", color: "#6B7280" }
+
+  type:
+    - { name: "feature", color: "#10B981" }
+    - { name: "bug", color: "#EF4444" }
+    - { name: "integration", color: "#8B5CF6" }
+    - { name: "agent-task", color: "#EC4899" }
+
+  endpoint:
+    - { name: "cloudflare", color: "#F38020" }
+    - { name: "salesforce", color: "#00A1E0" }
+    - { name: "vercel", color: "#000000" }
+    - { name: "digitalocean", color: "#0080FF" }
+    - { name: "claude", color: "#D4A574" }
+    - { name: "raspberry-pi", color: "#C51A4A" }
+
+# State Sync Configuration
+state_sync:
+  primary: salesforce
+  mirrors:
+    - cloudflare_kv
+    - github_projects
+
+  sync_interval: 30s
+  conflict_resolution: last_write_wins
+
+  fields_to_sync:
+    - id
+    - title
+    - status
+    - assignee
+    - priority
+    - sha_hash
+    - updated_at
+    - endpoint_status

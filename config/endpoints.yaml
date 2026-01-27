@@ -1,0 +1,433 @@
+# BlackRoad Multi-Endpoint Configuration
+# All API integrations for the inference accelerator
+# Unified interface for cloud, edge, mobile, and AI services
+
+version: "1.0"
+project: "blackroad-ai-inference-accelerator"
+
+# =============================================================================
+# CLOUD PLATFORMS
+# =============================================================================
+
+cloudflare:
+  name: "Cloudflare"
+  type: cloud
+  enabled: true
+
+  services:
+    workers:
+      endpoint: "https://api.cloudflare.com/client/v4/accounts/{account_id}/workers"
+      auth: api_token
+      env_var: CLOUDFLARE_API_TOKEN
+
+    kv:
+      endpoint: "https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces"
+      purpose: state_storage
+      namespaces:
+        - name: "BLACKROAD_STATE"
+          id: "${CLOUDFLARE_KV_STATE_ID}"
+        - name: "BLACKROAD_CACHE"
+          id: "${CLOUDFLARE_KV_CACHE_ID}"
+
+    r2:
+      endpoint: "https://api.cloudflare.com/client/v4/accounts/{account_id}/r2/buckets"
+      purpose: model_storage
+
+    ai:
+      endpoint: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run"
+      models:
+        - "@cf/meta/llama-3-8b-instruct"
+        - "@cf/mistral/mistral-7b-instruct"
+
+    pages:
+      endpoint: "https://api.cloudflare.com/client/v4/accounts/{account_id}/pages/projects"
+      deploy_hook: "${CLOUDFLARE_PAGES_DEPLOY_HOOK}"
+
+salesforce:
+  name: "Salesforce CRM"
+  type: crm
+  enabled: true
+  purpose: "Primary state management and project tracking"
+
+  endpoints:
+    auth:
+      url: "https://login.salesforce.com/services/oauth2/token"
+      type: oauth2
+
+    rest:
+      base_url: "https://{instance}.salesforce.com/services/data/v59.0"
+
+    sobjects:
+      - name: "BlackRoad_Project__c"
+        purpose: kanban_board
+      - name: "BlackRoad_Task__c"
+        purpose: kanban_card
+      - name: "BlackRoad_Endpoint__c"
+        purpose: integration_status
+      - name: "BlackRoad_Hash__c"
+        purpose: integrity_tracking
+
+  sync:
+    interval: 30s
+    push_events:
+      - card_created
+      - card_updated
+      - card_moved
+      - pr_status_changed
+    pull_events:
+      - assignment_changed
+      - priority_changed
+
+vercel:
+  name: "Vercel"
+  type: deployment
+  enabled: true
+
+  endpoints:
+    projects:
+      url: "https://api.vercel.com/v9/projects"
+      auth: bearer
+      env_var: VERCEL_TOKEN
+
+    deployments:
+      url: "https://api.vercel.com/v13/deployments"
+
+    domains:
+      url: "https://api.vercel.com/v9/projects/{projectId}/domains"
+
+  webhooks:
+    deployment_ready: "${VERCEL_WEBHOOK_DEPLOYMENT}"
+
+  integrations:
+    - edge_functions
+    - kv_storage
+    - blob_storage
+
+digitalocean:
+  name: "DigitalOcean"
+  type: cloud
+  enabled: true
+
+  endpoints:
+    base: "https://api.digitalocean.com/v2"
+    auth: bearer
+    env_var: DIGITALOCEAN_TOKEN
+
+  services:
+    droplets:
+      endpoint: "/droplets"
+      purpose: inference_nodes
+
+    kubernetes:
+      endpoint: "/kubernetes/clusters"
+      purpose: orchestration
+
+    spaces:
+      endpoint: "https://{region}.digitaloceanspaces.com"
+      purpose: model_storage
+
+    app_platform:
+      endpoint: "/apps"
+      purpose: deployment
+
+    functions:
+      endpoint: "/functions/namespaces"
+      purpose: serverless_inference
+
+# =============================================================================
+# AI & INFERENCE
+# =============================================================================
+
+claude:
+  name: "Claude (Anthropic)"
+  type: ai
+  enabled: true
+
+  endpoints:
+    messages:
+      url: "https://api.anthropic.com/v1/messages"
+      auth: x-api-key
+      env_var: ANTHROPIC_API_KEY
+
+    models:
+      - claude-opus-4-5-20251101
+      - claude-sonnet-4-20250514
+      - claude-haiku-3-5-20241022
+
+  agent_config:
+    max_tokens: 8192
+    temperature: 0.7
+    tools_enabled: true
+
+  rate_limits:
+    requests_per_minute: 50
+    tokens_per_minute: 100000
+
+ollama:
+  name: "Ollama (Local)"
+  type: ai_local
+  enabled: true
+
+  endpoints:
+    generate:
+      url: "http://localhost:11434/api/generate"
+    chat:
+      url: "http://localhost:11434/api/chat"
+    embeddings:
+      url: "http://localhost:11434/api/embeddings"
+
+  models:
+    - llama3
+    - mistral
+    - codellama
+    - phi3
+
+# =============================================================================
+# EDGE & RASPBERRY PI
+# =============================================================================
+
+raspberry_pi:
+  name: "Raspberry Pi Fleet"
+  type: edge
+  enabled: true
+
+  discovery:
+    method: mdns
+    service_type: "_blackroad._tcp"
+
+  endpoints:
+    inference:
+      port: 8080
+      path: "/v1/inference"
+
+    health:
+      port: 8080
+      path: "/health"
+
+    metrics:
+      port: 9090
+      path: "/metrics"
+
+  fleet:
+    - name: pi-node-1
+      host: "${PI_NODE_1_HOST}"
+      capabilities: [cpu, npu]
+
+    - name: pi-node-2
+      host: "${PI_NODE_2_HOST}"
+      capabilities: [cpu]
+
+    - name: pi-node-3
+      host: "${PI_NODE_3_HOST}"
+      capabilities: [cpu, gpu]
+
+# =============================================================================
+# MOBILE & DEVELOPMENT TOOLS
+# =============================================================================
+
+termius:
+  name: "Termius"
+  type: ssh_management
+  enabled: true
+  purpose: "SSH access to edge nodes and servers"
+
+  sync:
+    hosts_file: true
+    identity_sync: true
+
+  groups:
+    - name: "BlackRoad Pi Fleet"
+      hosts: raspberry_pi.fleet
+    - name: "Cloud Servers"
+      hosts:
+        - digitalocean.droplets
+        - vercel.edge
+
+ish:
+  name: "iSH (iOS Shell)"
+  type: mobile_shell
+  enabled: true
+  purpose: "iOS-based command line access"
+
+  capabilities:
+    - alpine_linux
+    - git_operations
+    - python_scripts
+    - ssh_client
+
+  sync_paths:
+    - /home/user/blackroad
+    - /etc/blackroad
+
+shellfish:
+  name: "Shellfish SFTP"
+  type: file_transfer
+  enabled: true
+  purpose: "iOS SFTP client for file management"
+
+  connections:
+    - name: "Development Server"
+      host: "${DEV_SERVER_HOST}"
+      path: "/var/blackroad"
+
+    - name: "Pi Fleet Storage"
+      hosts: raspberry_pi.fleet
+      path: "/opt/blackroad"
+
+working_copy:
+  name: "Working Copy"
+  type: git_client
+  enabled: true
+  purpose: "iOS Git client for mobile development"
+
+  repositories:
+    - org: "BlackRoad-OS"
+      repo: "blackroad-ai-inference-accelerator"
+      branch_prefix: "mobile/"
+
+  sync:
+    auto_fetch: true
+    fetch_interval: 300
+    push_on_save: false
+
+pyto:
+  name: "Pyto"
+  type: python_ide
+  enabled: true
+  purpose: "iOS Python development environment"
+
+  capabilities:
+    - numpy
+    - pandas
+    - requests
+    - inference_client
+
+  scripts:
+    - name: "health_check.py"
+      purpose: "Check all endpoint health"
+    - name: "deploy_model.py"
+      purpose: "Deploy models to edge"
+    - name: "sync_state.py"
+      purpose: "Sync CRM state"
+
+# =============================================================================
+# GITHUB INTEGRATION
+# =============================================================================
+
+github:
+  name: "GitHub"
+  type: vcs
+  enabled: true
+
+  endpoints:
+    api:
+      url: "https://api.github.com"
+      auth: bearer
+      env_var: GITHUB_TOKEN
+
+    graphql:
+      url: "https://api.github.com/graphql"
+
+  features:
+    projects_v2: true
+    actions: true
+    packages: true
+
+  webhooks:
+    - event: pull_request
+      actions: [opened, synchronize, closed]
+      handler: pr_pipeline
+
+    - event: push
+      branches: [main, "claude/*"]
+      handler: deploy_pipeline
+
+    - event: issues
+      actions: [opened, labeled]
+      handler: kanban_sync
+
+# =============================================================================
+# ADDITIONAL SERVICES
+# =============================================================================
+
+huggingface:
+  name: "HuggingFace"
+  type: model_hub
+  enabled: true
+
+  endpoints:
+    api:
+      url: "https://huggingface.co/api"
+    inference:
+      url: "https://api-inference.huggingface.co/models"
+
+  auth:
+    type: bearer
+    env_var: HUGGINGFACE_TOKEN
+
+supabase:
+  name: "Supabase"
+  type: database
+  enabled: true
+
+  endpoints:
+    rest:
+      url: "https://{project_ref}.supabase.co/rest/v1"
+    realtime:
+      url: "wss://{project_ref}.supabase.co/realtime/v1"
+    storage:
+      url: "https://{project_ref}.supabase.co/storage/v1"
+
+  auth:
+    type: apikey
+    env_var: SUPABASE_KEY
+
+redis:
+  name: "Redis (Upstash)"
+  type: cache
+  enabled: true
+
+  endpoints:
+    rest:
+      url: "${UPSTASH_REDIS_REST_URL}"
+      auth: bearer
+      env_var: UPSTASH_REDIS_REST_TOKEN
+
+# =============================================================================
+# ENDPOINT HEALTH & MONITORING
+# =============================================================================
+
+health_check:
+  enabled: true
+  interval: 60s
+  timeout: 10s
+
+  alerts:
+    - type: slack
+      webhook: "${SLACK_WEBHOOK_URL}"
+    - type: email
+      recipients: ["ops@blackroad.ai"]
+
+  retry:
+    attempts: 3
+    backoff: exponential
+    initial_delay: 2s
+    max_delay: 16s
+
+monitoring:
+  enabled: true
+
+  metrics:
+    endpoint: prometheus
+    port: 9090
+
+  tracing:
+    endpoint: jaeger
+    sample_rate: 0.1
+
+  logging:
+    level: info
+    format: json
+    destinations:
+      - stdout
+      - cloudflare_logpush
