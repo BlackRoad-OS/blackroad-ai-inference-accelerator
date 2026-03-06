@@ -92,8 +92,23 @@ class Card:
 
     def update(self, **kwargs) -> 'Card':
         """Update card fields."""
+        # Only allow updating a safe subset of fields to avoid overwriting
+        # internal attributes like ids, timestamps, or hash values.
+        updatable_fields = {
+            "title",
+            "description",
+            "type",
+            "status",
+            "priority",
+            "assignee",
+            "labels",
+            "metadata",
+            "salesforce_id",
+            "github_issue_number",
+            "github_project_item_id",
+        }
         for key, value in kwargs.items():
-            if hasattr(self, key):
+            if key in updatable_fields:
                 setattr(self, key, value)
         self.updated_at = time.time()
         self._update_hash()
