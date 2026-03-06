@@ -167,7 +167,7 @@ class EndpointClient:
                 ) as response:
                     try:
                         body = await response.json()
-                    except:
+                    except Exception:
                         body = await response.text()
 
                     return response.status, body
