@@ -23,9 +23,9 @@ from enum import Enum
 import hashlib
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Library-level logger; actual logging configuration is done by the application.
 logger = logging.getLogger("blackroad.state")
+logger.addHandler(logging.NullHandler())
 
 
 class Platform(Enum):
