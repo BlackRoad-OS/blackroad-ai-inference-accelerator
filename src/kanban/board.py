@@ -25,10 +25,7 @@ import yaml
 
 # Import hashing system
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from hashing.sha_infinity import KanbanHasher, sha256_hash
-
-
+from src.hashing.sha_infinity import KanbanHasher, sha256_hash
 class CardStatus(Enum):
     """Standard kanban card statuses."""
     BACKLOG = "backlog"
