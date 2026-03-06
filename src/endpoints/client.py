@@ -26,11 +26,7 @@ from enum import Enum
 import yaml
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("blackroad.endpoints")
-
-
 class EndpointType(Enum):
     """Endpoint categories."""
     CLOUD = "cloud"
