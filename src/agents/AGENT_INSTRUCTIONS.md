@@ -155,17 +155,17 @@ pending -> in_progress -> completed
 ### Creating Cards via Agent
 
 ```python
-from src.kanban.board import KanbanBoard
+from src.kanban.board import KanbanBoard, CardType, Priority
 
 board = KanbanBoard()
 
 # Create a new card
 card = board.create_card(
-    type="agent_task",
+    type=CardType.AGENT_TASK,
     title="Implement Cloudflare KV sync",
     description="Set up state synchronization with Cloudflare KV",
     assignee="claude-agent",
-    priority="P1",
+    priority=Priority.P1,
     labels=["integration", "cloudflare"],
     agent_metadata={
         "session_id": SESSION_ID,
